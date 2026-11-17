@@ -14,6 +14,7 @@
 #include <queue>
 #include <stack>
 #include <deque>
+#include <sstream>
 using namespace std;
 
 class Patient {
@@ -246,12 +247,210 @@ public:
 };
 
 class MedIndex {
+private:
+
+	AVLTree<Patient> index;
+	deque<Patient> waiting;
+	stack<Action> history;
+
+public:
+
+	void wait(int id, const string& name, int acuity) {
+		Patient p(id, name, acuity);
+		waiting.push_back(p);
+	}
+
+	void admit() {
+		if (waiting.empty()) return;
+
+		Patient p = waiting.front();
+
+		if (index.search(p) != nullptr) return;
+
+		waiting.pop_front();
+		index.insert(p);
+
+		Action a;
+		a.type = Action::ADMIT;
+		a.patient = p;
+		history.push(a);
+	}
+
+	void find(int id) {
+		Patient key(id, "", 0);
+		Node<Patient>* result = index.search(key);
+
+		if (result == nullptr) { 
+			cout << "not found\n";
+		} else { 
+			cout << result->data.id << " "
+				<< result->data.name << " "
+				<< result->data.acuity << "\n";
+		}
+	}
+
+	void update(int id, int newAcuity) {
+		Patient key(id, "", 0);
+		Node<Patient>* result = index.search(key);
+
+		if (result == nullptr) return;
+
+		int oldAcuity = result->data.acuity;
+		result->data.acuity = newAcuity;
+
+		Action a;
+		a.type = Action::UPDATE;
+		a.patient = result->data;
+		a.oldAcuity = oldAcuity;
+		a.newAcuity = newAcuity;
+		history.push(a);
+	}
+
+	void discharge(int id) {
+    Patient key(id, "", 0);
+    Node<Patient>* result = index.search(key);
+
+    if (result == nullptr) return;
+
+    Patient p = result->data;
+    index.remove(key);
+
+    Action a;
+    a.type = Action::DISCHARGE;
+    a.patient = p;
+    history.push(a);
+}
+
+	void undo() {
+		if (history.empty()) return;
+
+		Action a = history.top();
+		history.pop();
+
+		Patient key(a.patient.id, "", 0);
+
+		if (a.type == Action::ADMIT) {
+			index.remove(key);
+			waiting.push_front(a.patient);
+		}
+		else if (a.type == Action::UPDATE) {
+			Node<Patient>* result = index.search(key);
+
+			if (result != nullptr) {
+				result->data.acuity = a.oldAcuity;
+			}
+		}
+		else if (a.type == Action::DISCHARGE) {
+			index. insert(a.patient);
+		}
+	}
+
+	void print () {
+		index.printInorder();
+	}
+
+	void printWaiting() {
+		if (waiting.empty()) {
+			cout << "(none)\n";
+			return;
+		}
+
+		for (const Patient& p : waiting) {
+			cout << p.id << " " << p.name << " " 
+				<< p.acuity << "\n";
+		}
+	}
+
+	void printHistory() {
+		if (history.empty()) {
+			cout << "(none)\n";
+			return;
+		}
+
+		stack<Action> temp = history;
+
+		while (!temp.empty()) {
+			Action a = temp.top();
+			temp.pop();
+
+			if (a.type == Action::ADMIT) {
+				cout << "ADMIT " << a.patient.id << " " 
+					<< a.patient.name << " "
+					<< a.patient.acuity << "\n";
+			}
+			else if (a.type == Action::UPDATE) {
+				cout << "UPDATE " << a.patient.id << " " 
+					<< a.oldAcuity << "->"
+					<< a.newAcuity << "\n";
+			}
+			else if (a.type == Action::DISCHARGE) {
+				cout << "DISCHARGE " << a.patient.id << " " 
+					<< a.patient.name << " "
+					<< a.patient.acuity << "\n";
+			}
+		}
+	}
+
+	void height() {
+		cout << index.treeHeight() << "\n";
+	}	
 };
 
 int main() {
 	MedIndex medIdx;
-    string cmd;
-    while (cin >> cmd) {
+	
+    string line;
+	
+    while (getline(cin, line)) {
+
+		stringstream ss(line);
+		string cmd;
+
+		ss >> cmd;
+
+		if (cmd == "WAIT") {
+            int id, acuity;
+            string name;
+
+            ss >> id >> name >> acuity;
+            medIdx.wait(id, name, acuity);
+        }
+        else if (cmd == "ADMIT") {
+            medIdx.admit();
+        }
+        else if (cmd == "FIND") {
+            int id;
+
+            ss >> id;
+            medIdx.find(id);
+        }
+        else if (cmd == "UPDATE") {
+            int id, acuity;
+
+            ss >> id >> acuity;
+            medIdx.update(id, acuity);
+        }
+        else if (cmd == "DISCHARGE") {
+            int id;
+
+            ss >> id;
+            medIdx.discharge(id);
+        }
+        else if (cmd == "UNDO") {
+            medIdx.undo();
+        }
+        else if (cmd == "PRINT") {
+            medIdx.print();
+        }
+        else if (cmd == "WAITING") {
+            medIdx.printWaiting();
+        }
+        else if (cmd == "HISTORY") {
+            medIdx.printHistory();
+        }
+        else if (cmd == "HEIGHT") {
+            medIdx.height();
+        }
     }
     return 0;
 }
